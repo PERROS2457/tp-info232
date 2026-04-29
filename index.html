@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataFlow Pro - Collecte & Analyse</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    body { background: #0f172a; color: #e2e8f0; padding: 20px; }
+    h1, h2 { margin-bottom: 12px; }
+    .container { max-width: 1200px; margin: auto; }
+    .card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.2);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+    }
+    input, select, textarea, button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: white;
+      margin-top: 6px;
+    }
+    button {
+      background: #2563eb;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover { opacity: 0.95; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      border-bottom: 1px solid #334155;
+      padding: 10px;
+      text-align: left;
+      font-size: 14px;
+    }
+    .danger { background: #dc2626; }
+    .secondary { background: #475569; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-top: 15px;
+    }
+    .stat-box {
+      background: #1e293b;
+      padding: 16px;
+      border-radius: 12px;
+      text-align: center;
+    }
+    canvas { background: white; border-radius: 12px; padding: 10px; }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div>
+        <h1>DataFlow Pro</h1>
+        <p>Collecte, gestion, analyse et visualisation des données</p>
+      </div>
+      <button onclick="exportCSV()">Exporter CSV</button>
+    </div>
+
+    <div class="card">
+      <h2>Formulaire de collecte</h2>
+      <div class="grid">
+        <div>
+          <label>Nom</label>
+          <input id="name" placeholder="Ex: Jean" />
+        </div>
+        <div>
+          <label>Email</label>
+          <input id="email" type="email" placeholder="Ex: mail@email.com" />
+        </div>
+        <div>
+          <label>Âge</label>
+          <input id="age" type="number" placeholder="Ex: 23" />
+        </div>
+        <div>
+          <label>Catégorie</label>
+          <select id="category">
+            <option>Étudiant</option>
+            <option>Professionnel</option>
+            <option>Entrepreneur</option>
+            <option>Autre</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top: 14px;">
+        <label>Commentaire</label>
+        <textarea id="comment" rows="4" placeholder="Ajoute une note..."></textarea>
+      </div>
+      <div style="margin-top: 14px;">
+        <button onclick="saveData()">Enregistrer</button>
+        <button style="margin-top:10px;" onclick="generateTenRecords()">Remplir 10 enregistrements automatiques</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Indicateurs clés</h2>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="card">
+      <h2>Visualisation</h2>
+      <canvas id="chart" height="120"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>Données collectées</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Nom</th>
+            <th>Email</th>
+            <th>Âge</th>
+            <th>Catégorie</th>
+            <th>Commentaire</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div style="margin-top: 15px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="secondary" onclick="refreshUI()">Actualiser</button>
+        <button class="danger" onclick="clearAll()">Tout supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let chart;
+
+    function getData() {
+      return JSON.parse(localStorage.getItem('dataflow_records') || '[]');
+    }
+
+    function setData(data) {
+      localStorage.setItem('dataflow_records', JSON.stringify(data));
+    }
+
+    function saveData() {
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const age = document.getElementById('age').value.trim();
+      const category = document.getElementById('category').value;
+      const comment = document.getElementById('comment').value.trim();
+
+      if (!name || !email || !age) {
+        alert('Veuillez remplir les champs obligatoires.');
+        return;
+      }
+
+      const data = getData();
+      data.push({ name, email, age: Number(age), category, comment });
+      setData(data);
+
+      document.getElementById('name').value = '';
+      document.getElementById('email').value = '';
+      document.getElementById('age').value = '';
+      document.getElementById('comment').value = '';
+
+      refreshUI();
+      alert('Donnée enregistrée avec succès.');
+    }
+
+    function deleteItem(index) {
+      const data = getData();
+      data.splice(index, 1);
+      setData(data);
+      refreshUI();
+    }
+
+    function clearAll() {
+      if (confirm('Supprimer toutes les données ?')) {
+        localStorage.removeItem('dataflow_records');
+        refreshUI();
+      }
+    }
+
+    function renderTable() {
+      const body = document.getElementById('tableBody');
+      body.innerHTML = '';
+      const data = getData();
+
+      data.forEach((item, index) => {
+        body.innerHTML += `
+          <tr>
+            <td>${item.name}</td>
+            <td>${item.email}</td>
+            <td>${item.age}</td>
+            <td>${item.category}</td>
+            <td>${item.comment}</td>
+            <td><button class="danger" onclick="deleteItem(${index})">Supprimer</button></td>
+          </tr>
+        `;
+      });
+    }
+
+    function renderStats() {
+      const data = getData();
+      const total = data.length;
+      const avgAge = total ? (data.reduce((a,b)=>a+b.age,0)/total).toFixed(1) : 0;
+      const students = data.filter(d => d.category === 'Étudiant').length;
+      const pros = data.filter(d => d.category === 'Professionnel').length;
+
+      document.getElementById('stats').innerHTML = `
+        <div class="stat-box"><h3>${total}</h3><p>Total entrées</p></div>
+        <div class="stat-box"><h3>${avgAge}</h3><p>Âge moyen</p></div>
+        <div class="stat-box"><h3>${students}</h3><p>Étudiants</p></div>
+        <div class="stat-box"><h3>${pros}</h3><p>Professionnels</p></div>
+      `;
+    }
+
+    function renderChart() {
+      const data = getData();
+      const counts = {};
+
+      data.forEach(item => {
+        counts[item.category] = (counts[item.category] || 0) + 1;
+      });
+
+      const ctx = document.getElementById('chart').getContext('2d');
+      if (chart) chart.destroy();
+
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(counts),
+          datasets: [{
+            label: 'Répartition par catégorie',
+            data: Object.values(counts)
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: true }
+          }
+        }
+      });
+    }
+
+    function exportCSV() {
+      const data = getData();
+      if (!data.length) {
+        alert('Aucune donnée à exporter.');
+        return;
+      }
+
+      const headers = ['Nom','Email','Âge','Catégorie','Commentaire'];
+      const rows = data.map(d => [d.name, d.email, d.age, d.category, d.comment]);
+      const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'dataflow_export.csv';
+      a.click();
+    }
+
+    function generateTenRecords() {
+      const firstNames = ['Jean', 'Paul', 'Marie', 'Sophie', 'David', 'Alice', 'Bruno', 'Nadia', 'Kevin', 'Laura'];
+      const categories = ['Étudiant', 'Professionnel', 'Entrepreneur', 'Autre'];
+      const comments = ['RAS', 'Bon profil', 'À suivre', 'Contact validé', 'Projet intéressant'];
+
+      const data = getData();
+
+      for (let i = 0; i < 10; i++) {
+        const name = firstNames[Math.floor(Math.random() * firstNames.length)] + ' ' + (i + 1 + data.length);
+        const email = `user${Date.now()}${i}@demo.com`;
+        const age = Math.floor(Math.random() * 18) + 18;
+        const category = categories[Math.floor(Math.random() * categories.length)];
+        const comment = comments[Math.floor(Math.random() * comments.length)];
+
+        data.push({ name, email, age, category, comment });
+      }
+
+      setData(data);
+      refreshUI();
+      alert('10 enregistrements automatiques ajoutés avec succès.');
+    }
+
+    function refreshUI() {
+      renderTable();
+      renderStats();
+      renderChart();
+    }
+
+    refreshUI();
+  </script>
+</body>
+</html>
+
